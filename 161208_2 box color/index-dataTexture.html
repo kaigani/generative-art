@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Colour Sphere</title>
+
+		<!-- mobile viewport: -->
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"/>
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<!-- LIBRARIES -->
+		<script src="lib/dat.gui.min.js"></script>
+		<script src="lib/three.min.js"></script>
+				<script src="lib/threejs/shaders/CopyShader.js"></script>
+				<script src="lib/threejs/shaders/HorizontalBlurShader.js"></script>
+				<script src="lib/threejs/shaders/VerticalBlurShader.js"></script>
+
+				<script src="lib/threejs/postprocessing/EffectComposer.js"></script>
+				<script src="lib/threejs/postprocessing/RenderPass.js"></script>
+				<script src="lib/threejs/postprocessing/MaskPass.js"></script>
+				<script src="lib/threejs/postprocessing/ShaderPass.js"></script>
+
+		<script src="lib/delaunayTriangles.js"></script>
+		<!-- <script src="lib/lodash.core.js"></script> -->
+
+		<!-- MODULES -->
+		<script src="src/Stage.js"></script> 
+		<script src="src/CameraControl.js"></script>
+		
+		<script>
+
+			// GLOBALS
+			let stage
+
+			window.onload = function () {
+
+				// constants
+				const scene = new THREE.Scene()
+				const camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 3000 )
+				const cameraCtrl = new CameraControl(camera)
+
+				// light
+				const light = new THREE.DirectionalLight( 0xffffff );
+				light.position.set( 0.333, 0.333, 1 );
+				scene.add( light );
+
+				// camera drift
+				let velocity = -0.1
+
+				// Debugging gui
+				const gui = new dat.GUI();
+				const debugData = { foo: 20 };
+				gui.add(debugData,'foo');
+
+
+				// RENDERER set up
+				const renderer = new THREE.WebGLRenderer()
+				const bgColor = new THREE.Color(0xff0000)
+				renderer.setSize( window.innerWidth, window.innerHeight )
+				renderer.setClearColor( bgColor,0.5 )
+
+
+				document.body.appendChild( renderer.domElement )
+
+				// SET UP SCENE
+
+// REFERENCE – http://stackoverflow.com/questions/37771944/mapping-of-image-on-sphere-using-three-js
+
+				// geometry
+				var geometry = new THREE.BoxGeometry( 10, 10, 10, 8, 8, 8 );
+
+				// morph box into a sphere
+				for ( var i = 0; i < geometry.vertices.length; i ++ ) {
+
+					geometry.vertices[ i ].normalize().multiplyScalar( 10 ); // or whatever size you want
+
+				}
+
+				// texture is a collage; set offset/repeat per material index
+				var repeat = new THREE.Vector2( 1/3, 1/2 );
+				var offsets = [ 
+					new THREE.Vector2( 0, 0 ),
+					new THREE.Vector2( 0, 1/2 ),
+					new THREE.Vector2( 1/3, 0 ),
+					new THREE.Vector2( 1/3, 1/2 ),
+					new THREE.Vector2( 2/3, 0 ),
+					new THREE.Vector2( 2/3, 1/2 )
+				];
+
+				// redefine vertex normals consistent with a sphere; reset UVs
+				for ( var i = 0; i < geometry.faces.length; i ++ ) {
+
+					var face = geometry.faces[ i ];
+
+					face.vertexNormals[ 0 ].copy( geometry.vertices[ face.a ] ).normalize();
+					face.vertexNormals[ 1 ].copy( geometry.vertices[ face.b ] ).normalize();
+					face.vertexNormals[ 2 ].copy( geometry.vertices[ face.c ] ).normalize();
+
+					var uvs = geometry.faceVertexUvs[ 0 ];
+
+					for ( var j = 0; j < 3; j ++ ) {
+
+						uvs[ i ][ j ].multiply( repeat ).add( offsets[ face.materialIndex ] );
+
+					}
+
+					// face.normal - will not be used; don't worry about it
+
+				}
+				
+				//assignUVs(geometry);
+
+				const pixelData = [];
+				const w = 720;
+				const h = 720;
+
+
+				for (let y = 0; y < h; ++y) {
+				for (let x = 0; x < w; ++x) {
+					//const a = y < (h / 2) ? 50 : 255;
+					//const g = x < (w / 2) ? 255 : 100;
+					const r = Math.random()*256|0
+					const g = Math.random()*256|0
+					const b = Math.random()*256|0
+					const a = Math.random()*256|0
+
+					pixelData.push(r, g, b, a);
+				}
+				}
+
+				const dataTexture = new THREE.DataTexture(
+					Uint8Array.from(pixelData),
+					w,
+					h,
+					THREE.RGBAFormat,
+					THREE.UnsignedByteType//,
+					//THREE.UVMapping
+				);
+				dataTexture.needsUpdate = true;
+
+				const dataMaterial = new THREE.MeshPhongMaterial({
+					transparent: true,
+					color: 0xffffff,
+					map: dataTexture
+				});
+				dataMaterial.needsUpdate = true;
+
+				let materials = [
+					dataMaterial,
+					dataMaterial,
+					dataMaterial,
+					dataMaterial,
+					dataMaterial,
+					dataMaterial
+				]
+
+				const mesh = new THREE.Mesh(geometry, new THREE.MultiMaterial( materials ) );
+				scene.add(mesh);
+				
+
+				// HELPER FUNCTIONS
+
+				// between -1 to 1
+				function randomUnit(){
+					return Math.random()*2 - 1;
+				}
+
+				// between 0 and 2*PI
+				function randomAngle(){
+					return Math.random()*2*Math.PI;
+				}
+
+
+			// MOVEMENT
+				camera.position.z = 30
+
+				var render = function (){
+
+					requestAnimationFrame( render )
+
+					// Animation
+					camera.translateZ(velocity)
+
+					mesh.rotation.x += 0.031/5
+					mesh.rotation.y += 0.047/5
+
+					renderer.render(scene, camera)
+					//composer.render();
+				}
+
+				render()
+
+				document.body.addEventListener('keydown', keyDownHandler)
+
+			function keyDownHandler(e){
+				var keyCode = e.code
+
+				//console.log(keyCode)
+
+				switch(keyCode){
+
+					case 'Minus':
+						console.log('Reverse.')
+						velocity += 0.1
+						break
+					case 'Equal':
+						console.log('Forward.')
+						velocity -= 0.1
+						break
+
+					case 'Space':
+						console.log('Reset view.')
+						camera.lookAt(scene.position)
+						break
+				}
+			} 
+
+			
+		}
+
+		</script>
+
+		<script>
+    		function BlockElasticScroll(event) {
+        		event.preventDefault();
+    		}
+    	</script>
+		
+		<style type="text/css" media="screen">
+			html {
+				 height: 100%;
+				 overflow: hidden;
+			}
+			
+			body {
+				margin:  0px;
+				padding: 0px;
+				height: 100%;
+			}
+
+
+			.example {
+				position: absolute;
+				top: 0px;
+				width: 200px;
+				padding: 20px;
+				background-color: rgba(0,0,0,0.5);
+				color: wheat;
+				z-index:99;
+			}
+		</style>
+		
+	</head>
+	<body ontouchmove="BlockElasticScroll(event);">
+		<div class="example">
+			Here goes some UI gumpf
+		</div>
+	</body>
+</html>
+		
