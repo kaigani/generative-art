@@ -17,7 +17,7 @@
  	this.hasLoaded = false;
  	this.onload = null;
 
- 	fetch('../data/kant.txt').then(function(response) {
+ 	fetch('./data/kant.txt').then(function(response) {
 	  var contentType = response.headers.get("content-type");
 	  console.log('Content-type: ',contentType);
 
