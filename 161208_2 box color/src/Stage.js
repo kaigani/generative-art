@@ -1,10 +1,3 @@
-//
-// RGB Evolution
-//
-// Walk from the Green tier - excess down falls into Red, excess up evolves into Blue
-//
-//
-
 window.Stage = function Stage(aCanvas){
 
 	const stage = this;
@@ -14,19 +7,17 @@ window.Stage = function Stage(aCanvas){
 	const c = canvas.getContext('2d');
 
 	const drawMode = true;
-	const sqlen = 10;
+	const sqlen =10;
 
 	let grid = [];
-	let seed = [];
+	let seed = parseInt(Math.random()*360);
 
 	// PUBLIC
 	this.count = 0;
 	this.FPS = 0;
-	this.r_variance = gaussianRandom()*180|0; // high variance leads to further evolution up the chain
-	this.g_variance = gaussianRandom()*this.r_variance*1.2|0; // this.r_variance/2|0;
-	this.b_variance = gaussianRandom()*this.g_variance*1.2|0; // this.g_variance/2|0;
-	this.seeds = 1;
-	this.layer = -1;
+	this.variance = 90;
+	this.seeds = 8;
+	this.greyscale = false;
 	this.freeze = false;
 	this.filledCells = 0;
 
@@ -34,7 +25,7 @@ window.Stage = function Stage(aCanvas){
 	// Pick a random offset from the current and fill with the current value
 	function randomPlot(row,col){
 
-		if(grid[row][col] === null) return;
+		if(grid[row][col] === -1) return;
 
 		let value = grid[row][col];
 		let rows = grid.length;
@@ -54,37 +45,20 @@ window.Stage = function Stage(aCanvas){
 		
 		//let seed = ((gaussianRandom(stage.variance/360)-0.5)*180 + value)%360;
 		// don't wrap around
-		let seed = [
-			(gaussianRandom(stage.r_variance/256)-0.5)*128 + value[0],
-			(gaussianRandom(stage.g_variance/256)-0.5)*128 + value[1],
-			(gaussianRandom(stage.b_variance/256)-0.5)*128 + value[2]
-		];
+		let seed = (gaussianRandom(stage.variance/360)-0.5)*180 + value;
+		seed = (seed < 0) ? Math.abs(seed) : seed;
+		seed = (seed > 360) ? 720-seed : seed;
 
-		for(let i=0;i<3;i++){	
-			// contribute down
-			if(seed[i] < 0){
-				if(i>0) seed[i-1] += 255-Math.abs(seed[i])
-				seed[i] = 0 
-			// contribute up
-			}else if(seed[i] > 255){
-				if(i<2) seed[i+1] += seed[i]-255
-				seed[i] = 128 // exhaust 50% stock
-			} 
-		}
-
-		// average  (broken)
+		// average 
 		//value = (grid[row][col] !== -1) ? (grid[row][col]+seed)/2 : seed;
 
-		// weighted average (broken)
-		//value = (grid[row][col] !== -1) ? grid[row][col]*0.9 +seed*0.1  : seed;
+		// weighted average
+		value = (grid[row][col] !== -1) ? grid[row][col]*0.9 +seed*0.1  : seed;
 
 		// maintain existing
-		//value = (grid[row][col] !== null) ? grid[row][col] : seed;
-
-		// overwrite all
-		value = seed;
+		//value = (grid[row][col] !== -1) ? grid[row][col] : seed;
 		
-		if(grid[row][col] === null) stage.filledCells++;
+		if(grid[row][col] === -1) stage.filledCells++;
 		grid[row][col] = value;
 
 	}
@@ -111,7 +85,7 @@ window.Stage = function Stage(aCanvas){
 		for(i=0; i<rows; i++){
 			grid[i] = [];
 			for(j=0; j<cols; j++){
-				grid[i][j] = null;
+				grid[i][j] = -1;
 			}
 		}
 
@@ -119,7 +93,7 @@ window.Stage = function Stage(aCanvas){
 		for(let k=stage.seeds;k--;){
 			i = Math.random()*rows|0;
 			j = Math.random()*cols|0;
-			grid[i][j] = [ Math.random()*360, 0, 0 ]; // start on red
+			grid[i][j] = Math.random()*360;
 			stage.filledCells++;
 			randomPlot(i,j);
 		}
@@ -172,7 +146,6 @@ window.Stage = function Stage(aCanvas){
 				seed = grid[i][j];
 			
 				//blur – average by adjacent values
-				/*
 				let avgCount = 1
 				if(i>0 && grid[i-1][j] !== -1){
 					seed += grid[i-1][j];
@@ -191,18 +164,10 @@ window.Stage = function Stage(aCanvas){
 					avgCount++
 				}
 				seed /= avgCount;
-				*/
 				
-				if(seed !== null){
-					let rVal = (stage.layer|0) < 0 ? seed[0]|0 : seed[stage.layer|0]|0; // |0 for integer
-					let gVal = (stage.layer|0) < 0 ? seed[1]|0 : seed[stage.layer|0]|0; 
-					let bVal = (stage.layer|0) < 0 ? seed[2]|0 : seed[stage.layer|0]|0; 
+				
 
-					c.fillStyle = RGBtoString(rVal,gVal,bVal);
-				}else{
-					c.fillStyle = 'grey';
-				}
-
+				c.fillStyle = (seed !== -1) ? normalisedHSL(seed,stage.greyscale) : 'grey';
 				c.fillRect(j*sqlen,i*sqlen,sqlen,sqlen);
 
 				// change children
@@ -238,27 +203,6 @@ window.Stage = function Stage(aCanvas){
 	};
 
 	// Color functions
-
-	function RGBtoString(rVal, gVal, bVal){
-
-		var result;
-
-		aVal = 0.1; //Math.random();
-
-		result = 'rgba('+
-			rVal.toString()+
-			','+
-			gVal.toString()+
-			','+
-			bVal.toString()+
-			','+
-			aVal.toString()+
-			')';
-
-		//console.log(result);
-		return result;
-
-	}
 
 	function normalisedHSL(medianH=180, greyscale=false){
 
