@@ -1,0 +1,45 @@
+<html>
+	<head>
+		<title>Test a massive dataset</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+		<!-- <script src="three.min.js"></script>
+		<script src="lib/lodash.core.js"></script> -->
+		<script>
+
+			console.log('Memory before:\t', JSON.stringify(window.performance.memory) )
+
+			var hub = []
+
+			function makeNode(){
+				var a = []
+				for(var i=0; i<100000; i++){
+					a.push({
+						x: i,
+						y: i,
+						z: i
+					})
+				}
+				return a
+			}
+
+			// Just 1 will not explode javascript in the browser
+			// can make about 200 before browser explodes
+			hub.push( makeNode() )
+
+			console.log('Made 1 node of ', hub[0].length);
+			console.log('Memory after:\t', JSON.stringify(window.performance.memory) )
+
+			/*
+			for(var i=0;i<100000;i++){
+				hub.push( makeNode() )
+			}
+			*/
+
+		</script>
+	</body>
+</html>
