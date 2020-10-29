@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Colour Sphere</title>
+
+		<!-- mobile viewport: -->
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"/>
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<!-- LIBRARIES -->
+		<script src="lib/dat.gui.min.js"></script>
+		<script src="lib/three.min.js"></script>
+		<script src="lib/delaunayTriangles.js"></script>
+		<!-- <script src="lib/lodash.core.js"></script> -->
+
+		<!-- MODULES -->
+		<script src="src/Stage.js"></script> 
+		<script src="src/CameraControl.js"></script>
+		
+		<script>
+
+			// GLOBALS
+			let stage
+
+			window.onload = function () {
+
+				// constants
+				const scene = new THREE.Scene()
+				const camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 3000 )
+				const cameraCtrl = new CameraControl(camera)
+
+				// variables
+				let velocity = -0.1
+
+				// RENDERER set up
+				const renderer = new THREE.WebGLRenderer()
+				const bgColor = new THREE.Color(0xff0000)
+				renderer.setSize( window.innerWidth, window.innerHeight )
+				renderer.setClearColor( bgColor,0.5 )
+
+				document.body.appendChild( renderer.domElement )
+
+				// SET UP SCENE
+				//scene.fog = new THREE.Fog(0x0000ff,1,10000)
+
+				var geometry = new THREE.BoxGeometry( 1, 1, 1 );
+				var sphereGeometry = new THREE.SphereGeometry( 2, 16, 16 );
+
+				//console.log(sphereGeometry.faces)
+				//console.log(sphereGeometry.vertices)
+
+				let sun =  new THREE.SphereGeometry( 20, 256, 256 );
+				// RAINBOW hemisphere
+				/*
+				for(let i=0;i<sun.faces.length/2;i++){
+					let faceColor = new THREE.Color("hsl("+i+", 100%, 50%)");
+					sun.faces[i].color.set(faceColor)
+					//console.log(sun.faces[i])
+				}
+				*/
+
+				// RANDOM HUE color picking
+				let randomHues = new Array(sun.vertices.length)
+				randomHues[Math.random()*randomHues.length|0] = Math.random()
+
+
+				// DEBUGGING
+				/*
+				let last_f = sun.faces[sun.faces.length-1]
+				console.log("LAST FACE",last_f);
+				console.log("Random hues for vertices:",randomHues[last_f.a],randomHues[last_f.b],randomHues[last_f.c])
+				*/
+
+
+
+				// Define material & mesh
+				let sunMaterial = new THREE.MeshBasicMaterial( { vertexColors: THREE.FaceColors } );
+				let sunMesh = new THREE.Mesh(sun,sunMaterial)
+				scene.add(sunMesh);
+				
+				// full-size canvas
+				//canvas.width = document.body.clientWidth;
+				//canvas.height = document.body.clientHeight;
+
+				//stage = new Stage(canvas);
+
+				// Debugging gui
+				/*
+				var gui = new dat.GUI();
+				gui.add(stage,'FPS').listen(); // animation, frames per sec
+				gui.add(stage,'variance',0,360);
+				gui.add(stage,'seeds',0,100).step(1);
+				gui.add(stage,'greyscale');
+				gui.add(stage,'freeze').listen();
+				gui.add(stage,'clear');
+				gui.add(stage,'filledCells').listen();
+				*/
+
+				// Do preloading here
+
+				// Event listeners - Window
+				//window.addEventListener('resize', handleResize, false)
+
+			// MOVEMENT
+				camera.position.z = 100
+
+				var render = function (){
+
+					requestAnimationFrame( render )
+
+					// Animation
+					camera.translateZ(velocity)
+
+					sunMesh.rotation.x += 0.01
+					sunMesh.rotation.y += 0.01
+
+					// RANDOM red walk
+
+					// Pick random vertex colors - not quite a walk
+					for(let i=10000; --i;){
+
+						let randomFace = sun.faces[Math.random()*sun.faces.length|0]
+						let aColor = randomHues[randomFace.a] || randomHues[randomFace.b] || randomHues[randomFace.c]
+
+						if(aColor){
+
+							//console.log(i,aColor)
+
+							if(randomHues[randomFace.a] === undefined){
+								let newHue = aColor+Math.random()*0.1-0.05
+								newHue = (newHue < 0) ? Math.abs(newHue) : newHue
+								newHue = (newHue > 1) ? 2-newHue : newHue
+								randomHues[randomFace.a] = newHue
+							}
+
+							if(randomHues[randomFace.b] === undefined){
+								let newHue = aColor+Math.random()*0.2-0.1
+								newHue = (newHue < 0) ? Math.abs(newHue) : newHue
+								newHue = (newHue > 1) ? 2-newHue : newHue
+								randomHues[randomFace.b] = newHue
+							}
+
+							if(randomHues[randomFace.c] === undefined){
+								let newHue = aColor+Math.random()*0.2-0.1
+								newHue = (newHue < 0) ? Math.abs(newHue) : newHue
+								newHue = (newHue > 1) ? 2-newHue : newHue
+								randomHues[randomFace.c] = newHue
+							}
+						}
+					}
+					
+					// Color faces
+					for(let i=0; i < sun.faces.length; i++){
+						let f = sun.faces[i]
+						let avgColor = (randomHues[f.a]+randomHues[f.b]+randomHues[f.c])/3
+						sun.faces[i].color.setHSL(avgColor,1.0,0.5)
+					}
+					sun.colorsNeedUpdate = true;
+
+					renderer.render(scene, camera)
+				}
+
+				render()
+
+				document.body.addEventListener('keydown', keyDownHandler)
+
+			function keyDownHandler(e){
+				var keyCode = e.code
+
+				//console.log(keyCode)
+
+				switch(keyCode){
+
+					case 'Minus':
+						console.log('Reverse.')
+						velocity += 0.1
+						break
+					case 'Equal':
+						console.log('Forward.')
+						velocity -= 0.1
+						break
+
+					case 'Space':
+						console.log('Reset view.')
+						camera.lookAt(scene.position)
+						break
+				}
+			} 
+		}
+
+		</script>
+
+		<script>
+    		function BlockElasticScroll(event) {
+        		event.preventDefault();
+    		}
+    	</script>
+		
+		<style type="text/css" media="screen">
+			html {
+				 height: 100%;
+				 overflow: hidden;
+			}
+			
+			body {
+				margin:  0px;
+				padding: 0px;
+				height: 100%;
+			}
+
+			.example {
+				margin-bottom: 20px;
+			}
+		</style>
+		
+	</head>
+	<body ontouchmove="BlockElasticScroll(event);">
+	</body>
+</html>
+		

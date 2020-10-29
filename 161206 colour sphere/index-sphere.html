@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Colour Sphere</title>
+
+		<!-- mobile viewport: -->
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"/>
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<!-- LIBRARIES -->
+		<script src="lib/dat.gui.min.js"></script>
+		<script src="lib/three.min.js"></script>
+				<script src="lib/threejs/shaders/CopyShader.js"></script>
+				<script src="lib/threejs/shaders/HorizontalBlurShader.js"></script>
+				<script src="lib/threejs/shaders/VerticalBlurShader.js"></script>
+
+				<script src="lib/threejs/postprocessing/EffectComposer.js"></script>
+				<script src="lib/threejs/postprocessing/RenderPass.js"></script>
+				<script src="lib/threejs/postprocessing/MaskPass.js"></script>
+				<script src="lib/threejs/postprocessing/ShaderPass.js"></script>
+
+		<script src="lib/delaunayTriangles.js"></script>
+		<!-- <script src="lib/lodash.core.js"></script> -->
+
+		<!-- MODULES -->
+		<script src="src/Stage.js"></script> 
+		<script src="src/CameraControl.js"></script>
+		
+		<script>
+
+			// GLOBALS
+			let stage
+
+			window.onload = function () {
+
+				// constants
+				const scene = new THREE.Scene()
+				const camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 3000 )
+				const cameraCtrl = new CameraControl(camera)
+
+				// light
+				const light = new THREE.DirectionalLight( 0xffffff );
+				light.position.set( 0.333, 0.333, 1 );
+				scene.add( light );
+
+
+				// variables
+				let velocity = 0
+
+				// RENDERER set up
+				const renderer = new THREE.WebGLRenderer()
+				const bgColor = new THREE.Color(0xff0000)
+				renderer.setSize( window.innerWidth, window.innerHeight )
+				renderer.setClearColor( bgColor,0.5 )
+
+				// scene blur
+				/*
+				const composer = new THREE.EffectComposer( renderer );
+				composer.addPass( new THREE.RenderPass( scene, camera ) );
+				const hblur = new THREE.ShaderPass( THREE.HorizontalBlurShader );
+				composer.addPass( hblur );
+				const vblur = new THREE.ShaderPass( THREE.VerticalBlurShader );
+				// set this shader pass to render to screen so we can see the effects
+				vblur.renderToScreen = true;
+				composer.addPass( vblur );
+				*/
+
+
+				document.body.appendChild( renderer.domElement )
+
+				// SET UP SCENE
+				//scene.fog = new THREE.Fog(0x0000ff,1,10000)
+
+				var geometry = new THREE.BoxGeometry( 1, 1, 1 );
+				var sphereGeometry = new THREE.SphereGeometry( 2, 16, 16 );
+
+				//console.log(sphereGeometry.faces)
+				//console.log(sphereGeometry.vertices)
+
+				//let sun =  new THREE.SphereGeometry( 20, 256, 256 );
+
+				// CUSTOM geometry
+
+				let sun = new THREE.Geometry()
+				let myPoints = []
+
+				for(let i=0;i<10000;i++){
+					/*
+					let u = randomUnit()
+					let theta = randomAngle()
+					let multiplier = 1
+					let point = [
+						Math.sqrt(1 - u*u)*Math.cos(theta)*multiplier, // x
+						Math.sqrt(1 - u*u)*Math.sin(theta)*multiplier, // y
+						u*multiplier*randomUnit() // z
+						]
+					*/
+					let theta = randomAngle()
+					let phi = randomAngle()
+					let radius = 1
+					let point = [
+						radius*Math.sin(theta)*Math.cos(phi),
+						radius*Math.sin(theta)*Math.sin(phi),
+						radius*Math.cos(theta)
+					]
+
+					myPoints.push(point)
+					sun.vertices.push( new THREE.Vector3().fromArray(point) )
+				}
+
+				//console.log("myPoints:",myPoints)
+				
+
+				// HELPER FUNCTIONS
+
+				// between -1 to 1
+				function randomUnit(){
+					return Math.random()*2 - 1;
+				}
+
+				// between 0 and 2*PI
+				function randomAngle(){
+					return Math.random()*2*Math.PI;
+				}
+
+
+
+				let triangles = FindDelaunayTriangulation(myPoints)
+				//console.log("Delaunay Triangulation",triangles)
+
+				for(let i=0;i<triangles.triangles.length;i++){
+
+					// Get vertice indices (i1,i2,i3) and vertex vectors (p1,p2,p3)
+					let i1 = triangles.triangles[i].verts[0]
+					let i2 = triangles.triangles[i].verts[1]
+					let i3 = triangles.triangles[i].verts[2]
+
+					let p1 = sun.vertices[i1]
+					let p2 = sun.vertices[i2]
+					let p3 = sun.vertices[i3]
+
+					// Calculate normal
+					let u = new THREE.Vector3().copy(p2).sub(p1)
+					let v = new THREE.Vector3().copy(p3).sub(p1)
+					let normal = new THREE.Vector3().crossVectors(u,v)
+
+					let nextFace = new THREE.Face3( i1, i2, i3, normal )
+
+					nextFace.vertexColors.push( new THREE.Color(0xffffff) )
+					nextFace.vertexColors.push( new THREE.Color(0xffffff) )
+					nextFace.vertexColors.push( new THREE.Color(0xffffff) )
+					sun.faces.push( nextFace )
+
+				}
+				
+
+				// RAINBOW hemisphere
+				/*
+				for(let i=0;i<sun.faces.length/2;i++){
+					let faceColor = new THREE.Color("hsl("+i+", 100%, 50%)");
+					sun.faces[i].color.set(faceColor)
+					//console.log(sun.faces[i])
+				}
+				*/
+
+				// RANDOM HUE color picking
+				let randomHues = new Array(sun.vertices.length)
+				// seeds
+				randomHues[Math.random()*randomHues.length|0] = Math.random()*360
+				//randomHues[Math.random()*randomHues.length|0] = Math.random()*360
+				//randomHues[Math.random()*randomHues.length|0] = Math.random()*360
+				console.log("Hue array length:",randomHues.length)
+
+
+				// DEBUGGING
+				/*
+				let last_f = sun.faces[sun.faces.length-1]
+				console.log("LAST FACE",last_f);
+				console.log("Random hues for vertices:",randomHues[last_f.a],randomHues[last_f.b],randomHues[last_f.c])
+				*/
+
+
+
+				// Define material & mesh
+				//let sunMaterial = new THREE.MeshBasicMaterial( { vertexColors: THREE.VertexColors, wireframe: false } );
+				let sunMaterial = new THREE.MeshPhongMaterial( { vertexColors: THREE.VertexColors, specular: 0x009900, shininess: 0, shading: THREE.SmoothShading } )
+				sun.scale(10,10,10)
+				let sunMesh = new THREE.Mesh(sun,sunMaterial)
+				scene.add(sunMesh)
+				
+				// full-size canvas
+				//canvas.width = document.body.clientWidth;
+				//canvas.height = document.body.clientHeight;
+
+				//stage = new Stage(canvas);
+
+				// Debugging gui
+				/*
+				var gui = new dat.GUI();
+				gui.add(stage,'FPS').listen(); // animation, frames per sec
+				gui.add(stage,'variance',0,360);
+				gui.add(stage,'seeds',0,100).step(1);
+				gui.add(stage,'greyscale');
+				gui.add(stage,'freeze').listen();
+				gui.add(stage,'clear');
+				gui.add(stage,'filledCells').listen();
+				*/
+
+				// Do preloading here
+
+				// Event listeners - Window
+				//window.addEventListener('resize', handleResize, false)
+
+			// MOVEMENT
+				camera.position.z = 30
+
+				var render = function (){
+
+					requestAnimationFrame( render )
+
+					// Animation
+					camera.translateZ(velocity)
+
+					sunMesh.rotation.x += 0.01
+					sunMesh.rotation.y += 0.01
+					//sunMesh.scale = 100.0 // doesn't work
+
+					// RANDOM red walk
+
+					// Pick random vertex colors - not quite a walk
+					for(let i=1000; --i;){
+
+						let randomFace = sun.faces[Math.random()*sun.faces.length|0]
+						let aColor = randomHues[randomFace.a] || randomHues[randomFace.b] || randomHues[randomFace.c]
+						//console.log(aColor)
+
+						if(aColor){
+
+							//console.log(i,aColor)		
+							let seed = (gaussianRandom(90/360)-0.5)*180 + aColor;
+							seed = (seed < 0) ? Math.abs(seed) : seed;
+							seed = (seed > 360) ? 720-seed : seed;
+
+							if(randomHues[randomFace.a] === undefined){
+								let newHue = seed
+								newHue = (newHue < 0) ? Math.abs(newHue) : newHue
+								newHue = (newHue > 1) ? 2-newHue : newHue
+								randomHues[randomFace.a] = newHue
+							}
+							randomFace.vertexColors[0].set( normalisedHSL(randomHues[randomFace.a]) )
+
+							if(randomHues[randomFace.b] === undefined){
+								let newHue = seed
+								newHue = (newHue < 0) ? Math.abs(newHue) : newHue
+								newHue = (newHue > 1) ? 2-newHue : newHue
+								randomHues[randomFace.b] = newHue
+							}
+							randomFace.vertexColors[1].set( normalisedHSL(randomHues[randomFace.b]) )
+
+							if(randomHues[randomFace.c] === undefined){
+								let newHue = seed //aColor+Math.random()*0.06-0.03
+								newHue = (newHue < 0) ? Math.abs(newHue) : newHue
+								newHue = (newHue > 1) ? 2-newHue : newHue
+								randomHues[randomFace.c] = newHue
+							}
+							randomFace.vertexColors[2].set( normalisedHSL(randomHues[randomFace.c]) )
+						}
+					}
+					
+					// Color faces
+					
+					for(let i=0; i < sun.faces.length; i++){
+						let f = sun.faces[i]
+						let avgColor = 128 //(randomHues[f.a]+randomHues[f.b]+randomHues[f.c])/3
+						sun.faces[i].color.set(normalisedHSL(avgColor))
+					}
+					
+					sun.colorsNeedUpdate = true;
+					sun.verticesNeedUpdate = true;
+					sun.elementsNeedUpdate = true;
+
+					renderer.render(scene, camera)
+					//composer.render();
+				}
+
+				render()
+
+				document.body.addEventListener('keydown', keyDownHandler)
+
+			function keyDownHandler(e){
+				var keyCode = e.code
+
+				//console.log(keyCode)
+
+				switch(keyCode){
+
+					case 'Minus':
+						console.log('Reverse.')
+						velocity += 0.1
+						break
+					case 'Equal':
+						console.log('Forward.')
+						velocity -= 0.1
+						break
+
+					case 'Space':
+						console.log('Reset view.')
+						camera.lookAt(scene.position)
+						break
+				}
+			} 
+
+			// Color functions
+
+			function normalisedHSL(medianH=180, greyscale=false){
+
+				let hVal = parseInt(medianH); // Math.abs(parseInt( (gaussianRandom(0.1)-0.5) * 180 + medianH )%360);
+				//console.log("HUE",hVal);
+				// Bounce back from edges - don't wraparound
+				hVal = (hVal < 0) ? Math.abs(hVal) : hVal
+				hVal = (hVal > 360) ? 360-hVal%360 : hVal
+
+				const sVal = (greyscale) ? 0 : 100;
+				//const lVal = (hVal < 90) ? 0: 100; // B&W
+				let lVal = (hVal < 180) ? 50 : hVal*50/360+50|0; // make snowy
+				lVal = (greyscale) ? hVal*100/360|0 : lVal; // 50;
+
+				const result = 'hsl('+
+					hVal.toString()+
+					','+
+					sVal.toString()+
+					'%,'+
+					lVal.toString()+
+					'%)';
+
+				return result;
+			}
+
+			function gaussianRandom(distribution = 1.0){
+
+				let result;
+
+				do {
+
+					result = generateGaussianNoise(0.5,0.125*distribution)
+
+				} while(result < 0 || result >= 1)
+
+				return result
+			}
+
+			function generateGaussianNoise(mu = 0.0,sigma = 1.0){
+
+				//mu = mu || 0.0 
+				//sigma = sigma || 1.0
+				
+				const epsilon = Math.E
+				const two_pi = Math.PI * 2
+
+				let z0, u1, u2
+
+
+				//do {
+
+					u1 = Math.random()
+					u2 = Math.random()
+
+				//} while( u1 <= epsilon )
+
+				z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(two_pi * u2)
+
+				return z0 * sigma + mu
+			}
+		}
+
+		</script>
+
+		<script>
+    		function BlockElasticScroll(event) {
+        		event.preventDefault();
+    		}
+    	</script>
+		
+		<style type="text/css" media="screen">
+			html {
+				 height: 100%;
+				 overflow: hidden;
+			}
+			
+			body {
+				margin:  0px;
+				padding: 0px;
+				height: 100%;
+			}
+
+			.example {
+				margin-bottom: 20px;
+			}
+		</style>
+		
+	</head>
+	<body ontouchmove="BlockElasticScroll(event);">
+	</body>
+</html>
+		
